@@ -1,0 +1,59 @@
+<svg width="720" height="600" viewBox="0 0 720 600" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, sans-serif">
+<style>
+.b{stroke-width:1;rx:10}
+.th{font-size:14px;font-weight:600;fill:#1a1a1a}
+.ts{font-size:12px;fill:#555}
+.lbl{font-size:11px;fill:#888}
+.arr{stroke:#888;stroke-width:1.5;fill:none}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#888" stroke-width="1.5"/></marker></defs>
+
+<rect x="60" y="30" width="600" height="60" rx="10" fill="#e8f0fe" stroke="#9bb8e8"/>
+<text class="th" x="80" y="54">L1 · Presentation</text>
+<text class="ts" x="80" y="74">React SPA — 5 tabs: dashboard, financials, ask, graph, alerts</text>
+<text class="lbl" x="640" y="62" text-anchor="end">you click</text>
+<line x1="360" y1="90" x2="360" y2="110" class="arr" marker-end="url(#a)"/>
+
+<rect x="60" y="112" width="600" height="60" rx="10" fill="#e6f4f1" stroke="#8fc7bb"/>
+<text class="th" x="80" y="136">L2 · API / transport</text>
+<text class="ts" x="80" y="156">FastAPI — thin HTTP wrappers, ~10 endpoints, serves the SPA</text>
+<text class="lbl" x="640" y="144" text-anchor="end">HTTP / JSON</text>
+<line x1="360" y1="172" x2="360" y2="192" class="arr" marker-end="url(#a)"/>
+
+<rect x="60" y="194" width="600" height="60" rx="10" fill="#f0e9f7" stroke="#c3a8df"/>
+<text class="th" x="80" y="218">L3 · Orchestration</text>
+<text class="ts" x="80" y="238">pipeline.run_full + scripts — compose the whole flow</text>
+<text class="lbl" x="640" y="226" text-anchor="end">do the flow</text>
+<line x1="360" y1="254" x2="360" y2="274" class="arr" marker-end="url(#a)"/>
+
+<rect x="60" y="276" width="600" height="96" rx="10" fill="#fdecea" stroke="#eaa79c"/>
+<text class="th" x="80" y="300">L4 · Domain logic — the brains (src/*.py)</text>
+<text class="ts" x="80" y="324">ingest · triage · xbrl · analyze · vectorstore · qa</text>
+<text class="ts" x="80" y="346">entities · graph · clients (edgar, finnhub, groq)</text>
+<text class="lbl" x="640" y="324" text-anchor="end">the brains</text>
+<line x1="360" y1="372" x2="360" y2="392" class="arr" marker-end="url(#a)"/>
+
+<rect x="60" y="394" width="600" height="176" rx="10" fill="#f4f3f0" stroke="#cfccc4"/>
+<text class="th" x="80" y="416">L5 · Stores + external</text>
+<text class="lbl" x="640" y="416" text-anchor="end">truth + compute</text>
+
+<rect x="80" y="436" width="180" height="50" rx="8" fill="#e7f3ea" stroke="#9ccaa6"/>
+<text class="th" x="170" y="456" text-anchor="middle">SQLite</text>
+<text class="ts" x="170" y="474" text-anchor="middle">system of record</text>
+
+<rect x="272" y="436" width="180" height="50" rx="8" fill="#fdf3e3" stroke="#e8c98f"/>
+<text class="th" x="362" y="456" text-anchor="middle">ChromaDB</text>
+<text class="ts" x="362" y="474" text-anchor="middle">vectors for Q&amp;A</text>
+
+<rect x="464" y="436" width="176" height="50" rx="8" fill="#f0e9f7" stroke="#c3a8df"/>
+<text class="th" x="552" y="456" text-anchor="middle">NetworkX</text>
+<text class="ts" x="552" y="474" text-anchor="middle">in-memory graph</text>
+
+<rect x="171" y="500" width="180" height="50" rx="8" fill="#e8f0fe" stroke="#9bb8e8"/>
+<text class="th" x="261" y="520" text-anchor="middle">SEC EDGAR</text>
+<text class="ts" x="261" y="538" text-anchor="middle">8-K + XBRL · free</text>
+
+<rect x="369" y="500" width="180" height="50" rx="8" fill="#e6f4f1" stroke="#8fc7bb"/>
+<text class="th" x="459" y="520" text-anchor="middle">Groq</text>
+<text class="ts" x="459" y="538" text-anchor="middle">LLM · analysis only</text>
+</svg>

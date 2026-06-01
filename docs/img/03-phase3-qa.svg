@@ -1,0 +1,68 @@
+<svg width="720" height="640" viewBox="0 0 720 640" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, sans-serif">
+<style>
+.th{font-size:13px;font-weight:600;fill:#1a1a1a}
+.ts{font-size:12px;fill:#555}
+.it{font-size:11px;fill:#888;font-style:italic}
+.arr{stroke:#888;stroke-width:1.5;fill:none}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#888" stroke-width="1.5"/></marker></defs>
+
+<rect x="14" y="14" width="692" height="150" rx="10" fill="none" stroke="#ccc" stroke-dasharray="4 4"/>
+<text class="it" x="28" y="34">INDEX TIME — make stored calls searchable (vectorstore.index_call)</text>
+
+<rect x="40" y="50" width="190" height="56" rx="8" fill="#e7f3ea" stroke="#9ccaa6"/>
+<text class="th" x="135" y="70" text-anchor="middle">SQLite segments</text>
+<text class="ts" x="135" y="89" text-anchor="middle">authoritative text</text>
+<line x1="230" y1="78" x2="278" y2="78" class="arr" marker-end="url(#a)"/>
+
+<rect x="280" y="50" width="180" height="56" rx="8" fill="#e6f4f1" stroke="#8fc7bb"/>
+<text class="th" x="370" y="70" text-anchor="middle">embed each segment</text>
+<text class="ts" x="370" y="89" text-anchor="middle">local embeddings</text>
+<line x1="460" y1="78" x2="508" y2="78" class="arr" marker-end="url(#a)"/>
+
+<rect x="510" y="50" width="180" height="56" rx="8" fill="#fdf3e3" stroke="#e8c98f"/>
+<text class="th" x="600" y="70" text-anchor="middle">ChromaDB</text>
+<text class="ts" x="600" y="89" text-anchor="middle">vector + segment_id</text>
+<text class="it" x="360" y="134" text-anchor="middle">Chroma stores the vector + a pointer (segment_id) — never the trusted text</text>
+
+<rect x="14" y="178" width="692" height="446" rx="10" fill="none" stroke="#ccc" stroke-dasharray="4 4"/>
+<text class="it" x="28" y="198">QUERY TIME — answer a question (qa.answer)</text>
+
+<rect x="260" y="208" width="200" height="48" rx="8" fill="#f4f3f0" stroke="#cfccc4"/>
+<text class="th" x="360" y="226" text-anchor="middle">User question</text>
+<text class="ts" x="360" y="244" text-anchor="middle">POST /ask</text>
+
+<line x1="310" y1="256" x2="200" y2="294" class="arr" marker-end="url(#a)"/>
+<line x1="410" y1="256" x2="520" y2="294" class="arr" marker-end="url(#a)"/>
+<text class="it" x="150" y="280" text-anchor="middle">meaning</text>
+<text class="it" x="580" y="280" text-anchor="middle">company detect</text>
+
+<rect x="60" y="296" width="240" height="50" rx="8" fill="#e6f4f1" stroke="#8fc7bb"/>
+<text class="th" x="180" y="315" text-anchor="middle">embed question → ChromaDB</text>
+<text class="ts" x="180" y="333" text-anchor="middle">closest segments by meaning</text>
+<line x1="180" y1="346" x2="180" y2="384" class="arr" marker-end="url(#a)"/>
+<text class="it" x="245" y="367">segment_ids</text>
+
+<rect x="60" y="386" width="240" height="50" rx="8" fill="#e7f3ea" stroke="#9ccaa6"/>
+<text class="th" x="180" y="405" text-anchor="middle">join back → SQLite</text>
+<text class="ts" x="180" y="423" text-anchor="middle">fetch authoritative text</text>
+
+<rect x="420" y="296" width="240" height="50" rx="8" fill="#e8f0fe" stroke="#9bb8e8"/>
+<text class="th" x="540" y="315" text-anchor="middle">detect company</text>
+<text class="ts" x="540" y="333" text-anchor="middle">→ stored XBRL numbers</text>
+<line x1="540" y1="346" x2="540" y2="456" class="arr" marker-end="url(#a)"/>
+
+<line x1="180" y1="436" x2="180" y2="456" class="arr" marker-end="url(#a)"/>
+<rect x="200" y="458" width="320" height="50" rx="8" fill="#f0e9f7" stroke="#c3a8df"/>
+<text class="th" x="360" y="477" text-anchor="middle">assemble context</text>
+<text class="ts" x="360" y="495" text-anchor="middle">authoritative text + verified numbers</text>
+<path d="M180 458 L180 483 L198 483" class="arr" marker-end="url(#a)"/>
+<path d="M540 458 L540 483 L522 483" class="arr" marker-end="url(#a)"/>
+
+<line x1="360" y1="508" x2="360" y2="534" class="arr" marker-end="url(#a)"/>
+<rect x="200" y="536" width="320" height="50" rx="8" fill="#e6f4f1" stroke="#8fc7bb"/>
+<text class="th" x="360" y="555" text-anchor="middle">Groq answers from context ONLY</text>
+<text class="ts" x="360" y="573" text-anchor="middle">cites segment_ids · hallucination-guarded</text>
+<line x1="360" y1="586" x2="360" y2="606" class="arr" marker-end="url(#a)"/>
+<text class="ts" x="360" y="618" text-anchor="middle">→ {answer, grounded, sources[]}</text>
+</svg>
