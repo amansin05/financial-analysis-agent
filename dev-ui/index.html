@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Earnings Call Agent</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+  :root{--bg:#0f1419;--panel:#1a212b;--panel2:#232c38;--line:#2d3947;--txt:#e6edf3;
+        --muted:#8b98a5;--accent:#4493f8;--green:#3fb950;--amber:#d29922;--red:#f85149;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:14px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:18px;background:var(--panel)}
+  header h1{font-size:17px;margin:0;font-weight:600}
+  header .tag{color:var(--muted);font-size:12px}
+  nav{display:flex;gap:6px;margin-left:auto}
+  nav button{background:transparent;border:1px solid transparent;color:var(--muted);
+    padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px}
+  nav button.active{background:var(--panel2);color:var(--txt);border-color:var(--line)}
+  nav button:hover{color:var(--txt)}
+  main{padding:22px;max-width:1200px;margin:0 auto}
+  .grid{display:grid;gap:14px}
+  .cards{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .card h3{margin:0 0 4px;font-size:15px}
+  .card .sub{color:var(--muted);font-size:12px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .b-green{background:rgba(63,185,80,.15);color:var(--green)}
+  .b-amber{background:rgba(210,153,34,.15);color:var(--amber)}
+  .b-red{background:rgba(248,81,73,.15);color:var(--red)}
+  .b-blue{background:rgba(68,147,248,.15);color:var(--accent)}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);font-size:13px}
+  th{color:var(--muted);font-weight:600}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:var(--panel2)}
+  .chip{display:inline-block;background:var(--panel2);border:1px solid var(--line);
+    border-radius:20px;padding:3px 10px;margin:3px;font-size:12px}
+  input,select,textarea{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit}
+  textarea{width:100%;resize:vertical}
+  button.primary{background:var(--accent);border:none;color:#fff;padding:9px 18px;
+    border-radius:8px;cursor:pointer;font-weight:600;font-size:14px}
+  button.primary:disabled{opacity:.5;cursor:default}
+  .muted{color:var(--muted)}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;
+    justify-content:center;align-items:flex-start;padding:40px 20px;overflow:auto;z-index:10}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    max-width:840px;width:100%;padding:24px;position:relative}
+  .modal .x{position:absolute;top:14px;right:16px;cursor:pointer;color:var(--muted);font-size:20px}
+  .kv{display:flex;gap:8px;flex-wrap:wrap}
+  .bar{height:8px;background:var(--panel2);border-radius:5px;overflow:hidden}
+  .bar>div{height:100%;background:var(--accent)}
+  h2.sec{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    margin:22px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  #net{height:460px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .src{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:8px 0}
+  .src .meta{color:var(--muted);font-size:12px;margin-bottom:4px}
+  ul{margin:6px 0;padding-left:20px}
+  li{margin:3px 0}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+const api=(p,o)=>fetch('/api'+p,o).then(r=>r.json());
+const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+const fmt=(v,u)=>v==null?'—':u==='USD'?'$'+(v/1e9).toFixed(2)+'B':u==='USD/shares'?'$'+(+v).toFixed(2)+'/sh':''+v;
+const toneBadge=t=>({optimistic:'b-green',confident:'b-green',mixed:'b-amber',cautious:'b-amber',defensive:'b-red'}[t]||'b-blue');
+
+/* ---------------- Dashboard ---------------- */
+function Dashboard(){
+  const [companies,setCompanies]=useState([]);
+  const [calls,setCalls]=useState([]);
+  const [sel,setSel]=useState(null);
+  useEffect(()=>{api('/companies').then(setCompanies);api('/calls').then(setCalls);},[]);
+  return (<div>
+    <h2 className="sec">Companies ({companies.length})</h2>
+    <div className="grid cards">
+      {companies.map(c=>(<div className="card" key={c.ticker}>
+        <h3>{c.ticker} <span className="badge b-blue">{c.call_count}q</span></h3>
+        <div className="sub">{c.name}</div>
+        <div className="sub">{c.sector}</div>
+      </div>))}
+    </div>
+    <h2 className="sec">Calls ({calls.length}) — click a row</h2>
+    <div className="card" style={{padding:0}}>
+      <table><thead><tr>
+        <th>Ticker</th><th>Company</th><th>Period (label)</th><th>Report date</th>
+        <th>Segments</th><th>Source</th></tr></thead>
+        <tbody>{calls.map(c=>(<tr key={c.id} onClick={()=>setSel(c.id)}>
+          <td><b>{c.ticker}</b></td><td>{c.name}</td>
+          <td>FY{c.fiscal_year} Q{c.fiscal_quarter}</td><td>{c.call_date}</td>
+          <td>{c.segments}</td><td className="muted">{c.source}</td></tr>))}
+        </tbody></table>
+    </div>
+    {sel && <CallDetail id={sel} onClose={()=>setSel(null)} />}
+  </div>);
+}
+
+/* ---------------- Call detail ---------------- */
+function CallDetail({id,onClose}){
+  const [d,setD]=useState(null);
+  useEffect(()=>{api('/calls/'+id).then(setD);},[id]);
+  if(!d) return null;
+  const sum=d.summary&&d.summary.content||{};
+  const sent=d.sentiment&&d.sentiment.content||{};
+  const verdict=(d.reconciliation&&d.reconciliation.content&&d.reconciliation.content.headline_verdict)||{};
+  return (<div className="modal-bg" onClick={onClose}>
+    <div className="modal" onClick={e=>e.stopPropagation()}>
+      <span className="x" onClick={onClose}>✕</span>
+      <h2 style={{margin:'0 0 2px'}}>{d.call.ticker} · FY{d.call.fiscal_year} Q{d.call.fiscal_quarter}</h2>
+      <div className="muted">{d.call.name} · {d.call.call_date} · source {d.call.source}</div>
+
+      <h2 className="sec">Summary {sum.tone&&<span className={'badge '+toneBadge(sum.tone)}>{sum.tone}</span>}</h2>
+      {sum.headline ? <div>
+        <p><b>{sum.headline}</b></p>
+        {sum.key_points&&<ul>{sum.key_points.map((k,i)=><li key={i}>{k}</li>)}</ul>}
+        {sum.guidance&&<p><span className="muted">Guidance: </span>{sum.guidance}</p>}
+        {sum.risks&&<p><span className="muted">Risks: </span>{sum.risks.join('; ')}</p>}
+      </div> : <span className="muted">No summary stored.</span>}
+
+      <h2 className="sec">Financials — XBRL verified (truth) vs text</h2>
+      {d.financials.xbrl.length ? <table><thead><tr>
+        <th>Metric</th><th>XBRL value</th><th>Period</th><th>Text corroboration</th></tr></thead>
+        <tbody>{d.financials.xbrl.map(f=>{const v=verdict[f.metric]||{};
+          return (<tr key={f.metric}><td>{f.metric}</td><td><b>{fmt(f.value,f.unit)}</b></td>
+            <td className="muted">{f.period}</td>
+            <td>{v.status==='verified'?<span className="badge b-green">verified {(v.pct_diff*100).toFixed(2)}%</span>
+              :v.status==='unconfirmed'?<span className="badge b-amber">unconfirmed</span>
+              :<span className="muted">—</span>}</td></tr>);})}
+        </tbody></table>
+        : <span className="muted">No XBRL (fiscal-year-end quarter has no standalone 3-mo fact).</span>}
+
+      <h2 className="sec">Sentiment</h2>
+      {sent.overall_tone ? <div>
+        <div className="row"><span className={'badge '+toneBadge(sent.overall_tone)}>{sent.overall_tone}</span>
+          <span className="muted">score {sent.score}</span></div>
+        <p>{sent.summary}</p>
+        {sent.drivers&&<ul>{sent.drivers.map((dr,i)=><li key={i}>{dr.point} <span className="muted">— "{dr.source_quote&&dr.source_quote.slice(0,90)}…"</span></li>)}</ul>}
+      </div> : <span className="muted">No sentiment stored.</span>}
+
+      <h2 className="sec">Topics ({d.topics.length})</h2>
+      <div>{d.topics.map((t,i)=><span className="chip" key={i}>{t.label}
+        <span className="muted"> {t.sentiment>0?'+':''}{t.sentiment}</span></span>)}</div>
+    </div>
+  </div>);
+}
+
+/* ---------------- Ask (Q&A) ---------------- */
+function Ask(){
+  const [q,setQ]=useState('Which company returned the most cash to shareholders?');
+  const [ticker,setTicker]=useState('');
+  const [companies,setCompanies]=useState([]);
+  const [res,setRes]=useState(null);
+  const [loading,setLoading]=useState(false);
+  useEffect(()=>{api('/companies').then(setCompanies);},[]);
+  const go=()=>{setLoading(true);setRes(null);
+    post('/ask',{question:q,ticker:ticker||null}).then(r=>{setRes(r);setLoading(false);});};
+  return (<div>
+    <h2 className="sec">Grounded Q&A</h2>
+    <textarea rows="2" value={q} onChange={e=>setQ(e.target.value)} placeholder="Ask about the earnings data…" />
+    <div className="row" style={{marginTop:10}}>
+      <select value={ticker} onChange={e=>setTicker(e.target.value)}>
+        <option value="">All companies</option>
+        {companies.map(c=><option key={c.ticker} value={c.ticker}>{c.ticker}</option>)}
+      </select>
+      <button className="primary" onClick={go} disabled={loading||!q.trim()}>{loading?'Thinking…':'Ask'}</button>
+      <span className="muted">retrieval → SQLite text + XBRL financials → grounded answer</span>
+    </div>
+    {res&&<div className="card" style={{marginTop:16}}>
+      <div className="row"><b style={{fontSize:15}}>Answer</b>
+        <span className={'badge '+(res.grounded?'b-green':'b-amber')}>{res.grounded?'grounded':'not in data'}</span></div>
+      <p style={{fontSize:15}}>{res.answer}</p>
+      {res.sources.length>0&&<div>
+        <h2 className="sec">Sources ({res.sources.length})</h2>
+        {res.sources.map(s=>(<div className="src" key={s.segment_id}>
+          <div className="meta">[seg {s.segment_id}] {s.ticker} {s.quarter} · {s.who}</div>{s.text}</div>))}
+      </div>}
+    </div>}
+  </div>);
+}
+
+/* ---------------- Graph ---------------- */
+function GraphView({active}){
+  const [g,setG]=useState(null);
+  const [theme,setTheme]=useState('artificial intelligence');
+  const [prop,setProp]=useState(null);
+  const netRef=useRef(); const inst=useRef();
+  useEffect(()=>{api('/graph').then(setG);},[]);
+  useEffect(()=>{
+    // Build once, only when the tab is visible (hidden div has 0 size).
+    if(!g||!netRef.current||!active||inst.current) return;
+    const color={company:'#4493f8',topic:'#3fb950',person:'#d29922'};
+    const nodes=g.nodes.map(n=>({id:n.id,label:n.label,
+      color:color[n.kind]||'#888',shape:n.kind==='company'?'box':'dot',
+      size:n.kind==='company'?22:n.kind==='topic'?14:10,font:{color:'#e6edf3',size:13}}));
+    const edges=g.edges.map(e=>({from:e.source,to:e.target,color:{color:'#2d3947'}}));
+    inst.current=new vis.Network(netRef.current,{nodes,edges},{
+      physics:{stabilization:true,barnesHut:{springLength:130}},
+      interaction:{hover:true}});
+  },[g,active]);
+  const explore=lbl=>{setTheme(lbl);api('/theme/'+encodeURIComponent(lbl)).then(r=>setProp(r.propagation));};
+  if(!g) return <span className="muted">Loading graph…</span>;
+  return (<div>
+    <h2 className="sec">Knowledge graph — {g.stats.nodes} nodes, {g.stats.edges} edges
+      <span className="muted"> (company · topic · person)</span></h2>
+    <div ref={netRef} id="net"></div>
+    <div className="grid" style={{gridTemplateColumns:'1fr 1fr',marginTop:16}}>
+      <div className="card">
+        <b>Theme pervasiveness</b> <span className="muted">(companies discussing)</span>
+        {g.pervasiveness.map(p=>(<div key={p.topic} style={{margin:'8px 0',cursor:'pointer'}} onClick={()=>explore(p.topic)}>
+          <div className="row" style={{justifyContent:'space-between'}}>
+            <span>{p.topic}</span><span className="muted">{p.company_count}</span></div>
+          <div className="bar"><div style={{width:(p.company_count/6*100)+'%'}}></div></div>
+        </div>))}
+      </div>
+      <div className="card">
+        <b>Theme propagation:</b> <span className="badge b-green">{theme}</span>
+        <p className="muted" style={{fontSize:12}}>Click a theme on the left to trace it across companies/quarters.</p>
+        {prop ? (prop.length?prop.map(r=>(<div className="src" key={r.company}>
+          <div className="row" style={{justifyContent:'space-between'}}>
+            <b>{r.company}</b><span className="badge b-blue">sent {r.sentiment}</span></div>
+          <div className="muted" style={{fontSize:12}}>{(r.quarters||[]).join(' · ')}</div>
+        </div>)):<span className="muted">theme not found</span>) : null}
+        <h2 className="sec">Communities</h2>
+        {g.communities.map((c,i)=><div key={i} className="src">
+          <span className="muted">cluster {i+1}: </span>{c.join(', ')}</div>)}
+      </div>
+    </div>
+  </div>);
+}
+
+/* ---------------- Financials (any company) ---------------- */
+function Financials(){
+  const [q,setQ]=useState('Tesla');
+  const [matches,setMatches]=useState([]);
+  const [detail,setDetail]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [sel,setSel]=useState(null);
+  const [ingesting,setIngesting]=useState(false);
+  const [ingestMsg,setIngestMsg]=useState(null);
+  const search=()=>{setLoading(true);setDetail(null);setMatches([]);setIngestMsg(null);
+    api('/lookup?q='+encodeURIComponent(q)).then(d=>{
+      setMatches(d.matches||[]);setDetail(d);setSel(d.selected&&d.selected.cik);setLoading(false);});};
+  const pick=(cik)=>{setLoading(true);setSel(cik);setIngestMsg(null);
+    api('/lookup?cik='+cik).then(d=>{setDetail(d);setLoading(false);});};
+  const ingest=(ticker)=>{setIngesting(true);setIngestMsg(null);
+    post('/ingest',{ticker}).then(r=>{setIngesting(false);
+      if(r.ok){setIngestMsg({ok:true,text:`Ingested ${r.ticker}: ${r.segments} segments, ${r.indexed} embedded, ${r.topics} topics, ${r.verified}/${r.metrics} verified, tone ${r.tone}. Now available in Dashboard / Ask / Graph.`});
+        setDetail(d=>({...d,ingested:true}));}
+      else setIngestMsg({ok:false,text:r.error||'ingest failed'});});};
+  const marginKeys=detail&&detail.margins?Object.keys(detail.margins):[];
+  return (<div>
+    <h2 className="sec">Financials lookup — any SEC-filing company (live from EDGAR XBRL)</h2>
+    <div className="row">
+      <input style={{flex:1,minWidth:240}} value={q} onChange={e=>setQ(e.target.value)}
+        onKeyDown={e=>e.key==='Enter'&&search()} placeholder="Ticker or name — e.g. TSLA, Netflix, Coca-Cola, JPMorgan" />
+      <button className="primary" onClick={search} disabled={loading||!q.trim()}>{loading?'Fetching…':'Look up'}</button>
+    </div>
+    {matches.length>1&&<div style={{marginTop:10}}>
+      <span className="muted" style={{fontSize:12}}>matches — click to switch: </span>
+      {matches.map(m=>(<span key={m.cik} className="chip" style={{cursor:'pointer',
+        borderColor:sel===m.cik?'var(--accent)':'var(--line)'}} onClick={()=>pick(m.cik)}>
+        {m.ticker} · {m.name}</span>))}
+    </div>}
+    {detail&&detail.selected&&<div className="card" style={{marginTop:16}}>
+      <div className="row" style={{justifyContent:'space-between'}}>
+        <div><h3 style={{margin:0}}>{detail.selected.ticker} <span className="muted" style={{fontWeight:400}}>{detail.selected.name}</span></h3>
+          <div className="muted" style={{fontSize:12}}>CIK {detail.selected.cik} · latest quarter ending {detail.period||'—'}</div></div>
+        <div className="row">
+          {detail.ingested?<span className="badge b-green">in your DB (full analysis available)</span>
+            :<span className="badge b-blue">live from SEC (not yet ingested)</span>}
+          {!detail.ingested&&detail.selected.ticker&&
+            <button className="primary" disabled={ingesting}
+              onClick={()=>ingest(detail.selected.ticker)}>
+              {ingesting?'Ingesting… (~30s)':'⬇ Ingest into full pipeline'}</button>}
+        </div>
+      </div>
+      {ingestMsg&&<div className="src" style={{marginTop:10,
+        borderColor:ingestMsg.ok?'var(--green)':'var(--red)'}}>{ingestMsg.text}</div>}
+      {detail.metrics&&detail.metrics.length?<table style={{marginTop:12}}><thead><tr>
+        <th>Metric</th><th>Value</th><th>Period end</th></tr></thead>
+        <tbody>{detail.metrics.map(m=>(<tr key={m.metric} style={{cursor:'default'}}>
+          <td>{m.metric.replace(/_/g,' ')}</td><td><b>{fmt(m.value,m.unit)}</b></td>
+          <td className="muted">{m.period}</td></tr>))}
+        </tbody></table>:<p className="muted">No standalone quarterly XBRL (e.g. a fiscal-year-end period).</p>}
+      {marginKeys.length>0&&<div style={{marginTop:12}}>
+        {marginKeys.map(k=>(<span className="chip" key={k}>{k}: <b>{detail.margins[k]}%</b></span>))}</div>}
+    </div>}
+    {detail&&!detail.selected&&<p className="muted" style={{marginTop:16}}>No SEC company matched “{q}”.</p>}
+  </div>);
+}
+
+/* ---------------- Alerts ---------------- */
+function AlertRow({x}){
+  const [open,setOpen]=useState(false);
+  const hasSeg=x.segment_id!=null;
+  return (<div className="card" style={{marginBottom:10}}>
+    <div className="row" style={{cursor:hasSeg?'pointer':'default'}} onClick={()=>hasSeg&&setOpen(o=>!o)}>
+      <span className="badge b-red">NEG TOPIC</span>
+      <b>{x.ticker}</b><span>{x.quarter}</span>
+      <span>{x.topic}</span><span className="muted">sentiment {x.sentiment}</span>
+      {hasSeg
+        ? <span className="muted" style={{marginLeft:'auto'}}>{open?'▼ hide':'▶ show'} source (seg {x.segment_id})</span>
+        : <span className="muted" style={{marginLeft:'auto'}}>no source segment linked</span>}
+    </div>
+    {open&&hasSeg&&<div className="src" style={{marginTop:10}}>
+      <div className="meta">[seg {x.segment_id}] {x.ticker} {x.quarter}{x.who?' · '+x.who:''}</div>
+      {x.segment_text||<span className="muted">(segment text unavailable)</span>}
+    </div>}
+  </div>);
+}
+function Alerts(){
+  const [a,setA]=useState(null);
+  useEffect(()=>{api('/alerts').then(setA);},[]);
+  if(!a) return <span className="muted">Loading…</span>;
+  return (<div>
+    <h2 className="sec">Alerts — negative-sentiment topics ({a.length}) · click to see the source segment</h2>
+    {a.length===0?<span className="muted">No alerts.</span>:
+      a.map((x,i)=><AlertRow key={i} x={x} />)}
+  </div>);
+}
+
+/* ---------------- App ---------------- */
+function App(){
+  const [tab,setTab]=useState('dashboard');
+  const order=['dashboard','financials','ask','graph','alerts'];
+  const labels={dashboard:'Dashboard',financials:'Financials',ask:'Ask',graph:'Graph',alerts:'Alerts'};
+  // All tabs stay MOUNTED; we just toggle visibility so each tab keeps its state
+  // (search results, answers, graph) when you switch away and back.
+  return (<div>
+    <header>
+      <h1>📊 Earnings Call Agent</h1>
+      <span className="tag">SQLite · ChromaDB · NetworkX · Groq · SEC XBRL</span>
+      <nav>{order.map(t=>(
+        <button key={t} className={tab===t?'active':''} onClick={()=>setTab(t)}>{labels[t]}</button>))}</nav>
+    </header>
+    <main>
+      <div style={{display:tab==='dashboard'?'block':'none'}}><Dashboard/></div>
+      <div style={{display:tab==='financials'?'block':'none'}}><Financials/></div>
+      <div style={{display:tab==='ask'?'block':'none'}}><Ask/></div>
+      <div style={{display:tab==='graph'?'block':'none'}}><GraphView active={tab==='graph'}/></div>
+      <div style={{display:tab==='alerts'?'block':'none'}}><Alerts/></div>
+    </main>
+  </div>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
