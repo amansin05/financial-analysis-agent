@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "financial-analysis-agent"
+version = "0.1.0"
+description = "Earnings-call financial analysis agent — SEC XBRL + LLM, fully local & free."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Aman Kumawat" }]
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.1",
+    "groq>=0.11.0",
+    "pymupdf>=1.24.0",
+    "pdfplumber>=0.11.0",
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+    "networkx>=3.3",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+faa-serve = "financial_analysis_agent.server.app:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+financial_analysis_agent = ["utils/schema.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

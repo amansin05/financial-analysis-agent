@@ -1,0 +1,19 @@
+# --- Phase 0: core glue + connectivity ---
+requests>=2.31.0
+python-dotenv>=1.0.1
+groq>=0.11.0
+
+# --- Phase 1+: PDF triage, text, tables (installed now so the env is complete) ---
+pymupdf>=1.24.0          # fitz: inventory, text extraction, rasterizing
+pdfplumber>=0.11.0       # table extraction
+
+# --- Phase 3: vector search + local embeddings ---
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+
+# --- Phase 4: graph analysis ---
+networkx>=3.3
+
+# --- UI: REST API backend (React SPA is served via CDN, no Node build needed) ---
+fastapi>=0.115.0
+uvicorn>=0.30.0
