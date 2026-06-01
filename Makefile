@@ -47,5 +47,4 @@ backfill:       ## Backfill quarters: make backfill TICKERS="AAPL MSFT" QUARTERS
 	$(PY) -m scripts.backfill $(TICKERS) --quarters $(QUARTERS)
 
 clean:          ## Remove caches (keeps .financial_analysis_agent_cache data)
-	find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name "*.egg-info" -prune -exec rm -rf {} + 2>/dev/null || true
+	$(PY) -c "import shutil,pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('__pycache__')]; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('*.egg-info')]"
