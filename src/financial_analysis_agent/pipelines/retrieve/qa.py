@@ -8,6 +8,7 @@ the context doesn't contain the answer.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from datetime import datetime, timezone
@@ -42,13 +43,30 @@ def _company_index() -> dict[str, str]:
 
 
 def detect_tickers(question: str) -> list[str]:
-    """Tickers/company names mentioned in the question (word-boundary, ordered, unique)."""
+    """Tickers/company names mentioned in the question (word-boundary, ordered, unique).
+
+    Tolerant of typos: a question word that is a close fuzzy match to a known ticker or
+    company name (e.g. "nvdia" -> NVDA, "microsft" -> MSFT) still resolves, so a single
+    misspelling doesn't silently drop the company filter + leadership/financials bridge.
+    """
     idx = _company_index()
-    found: list[str] = []
     low = question.lower()
+    found: list[str] = []
+
+    # 1) Exact word-boundary matches on ticker / name-word / alias.
     for term, tk in idx.items():
         if re.search(r"\b" + re.escape(term) + r"\b", low) and tk not in found:
             found.append(tk)
+
+    # 2) Fuzzy fallback for misspellings. Only words >=4 chars, high cutoff, to avoid
+    #    matching ordinary English words to a ticker.
+    keys = list(idx.keys())
+    for word in re.findall(r"[a-z]{4,}", low):
+        if word in idx:
+            continue  # already an exact hit above
+        close = difflib.get_close_matches(word, keys, n=1, cutoff=0.82)
+        if close and idx[close[0]] not in found:
+            found.append(idx[close[0]])
     return found
 
 _SYS = (
@@ -58,20 +76,35 @@ _SYS = (
     "relied on. Respond with ONLY valid JSON."
 )
 
-_INSTRUCTIONS = """Answer the question using ONLY the context below: the numbered
-segments and (when present) the [XBRL-verified financials] line. The financials line
-is authoritative for exact figures and margins; prefer it for numeric answers. You may
-compute simple things (e.g. a margin) from the verified financials.
+_INSTRUCTIONS = """Answer the QUESTION using ONLY the context below: the numbered
+segments and (when present) the [XBRL-verified financials] and [leadership] lines. The
+financials line is authoritative for exact figures and margins; the leadership line is
+authoritative for who holds which executive role. Prefer these lines over segment prose
+for those facts. You may compute simple things (e.g. a margin, a growth rate, a
+difference) from the verified financials.
+
+Write a DETAILED, well-structured answer -- never a single bare line:
+- Start with a direct one-sentence answer to the question.
+- Then expand: cite concrete figures, margins, quarters, and short quotes from the
+  context to support it. Explain the "so what", not just the number.
+- If the context covers more than one company (or more than one quarter), COMPARE them
+  explicitly: state who is higher/lower, by how much (absolute and/or %), and what it
+  implies. A small markdown table or bullet list is welcome for comparisons.
+- Use short paragraphs and "- " bullet lines (with real newlines) for readability.
+- Keep EVERY claim grounded in the context. Never invent numbers, companies, or facts
+  that are not present. If the context only partially answers, give what is supported
+  and clearly state what is missing.
+
 Return JSON: {
-  "answer": "your answer, concise and specific",
-  "citations": [integer segment ids you used; omit the financials line, it has no id],
-  "grounded": true if the context (segments OR verified financials) answered it, else false
+  "answer": "a detailed, multi-sentence answer; use \\n for line breaks and '- ' bullets",
+  "citations": [integer segment ids you actually used; omit the financials/leadership lines, they have no id],
+  "grounded": true if the context (segments, verified financials, OR leadership) answered it fully or partially, else false
 }
 Do not include any text outside the JSON.
 
 QUESTION: {question}
 
-SEGMENTS:
+CONTEXT:
 {context}
 """
 
@@ -122,6 +155,33 @@ def _financials_block(tickers: list[str]) -> str:
     return "\n".join(blocks)
 
 
+def _executives_block(tickers: list[str]) -> str:
+    """Extracted leadership (executive_tenure) for each ticker's company.
+
+    Authoritative for who-holds-which-role questions. The 8-K press-release path has
+    no speaker segmentation, so a CEO/CFO name lives only as an attribution tail inside
+    a long quote segment ("...said Dr. Lisa Su, AMD chair and CEO") -- which semantic
+    search ranks poorly against "who is the CEO". This structured line answers it
+    regardless of phrasing. Mirrors _financials_block: a no-id authoritative preamble.
+    """
+    blocks = []
+    for ticker in tickers:
+        with db.connect() as conn:
+            rows = conn.execute(
+                "SELECT p.full_name, et.role FROM executive_tenure et "
+                "JOIN people p ON p.id = et.person_id "
+                "JOIN companies co ON co.id = et.company_id "
+                "WHERE co.ticker = ? AND COALESCE(et.role, '') <> 'other' "
+                "ORDER BY et.id",
+                (ticker.upper(),),
+            ).fetchall()
+        if not rows:
+            continue
+        people = "; ".join(f"{r['full_name']} - {r['role']}" for r in rows)
+        blocks.append(f"[{ticker} leadership, extracted from filings]: {people}")
+    return "\n".join(blocks)
+
+
 def _format_context(hits: list[dict], segs: dict[int, dict]) -> str:
     lines = []
     for h in hits:
@@ -160,16 +220,19 @@ def answer(
 
     segs = _fetch_segments([h["segment_id"] for h in hits])
     context = _format_context(hits, segs)
-    fin = _financials_block(detected)
-    if fin:
-        context = fin + "\n\n" + context
+    preamble = "\n".join(b for b in (_executives_block(detected), _financials_block(detected)) if b)
+    if preamble:
+        context = preamble + "\n\n" + context
 
     client = client or GroqClient()
     prompt = _INSTRUCTIONS.replace("{question}", question).replace("{context}", context)
-    raw = client.chat(prompt, system=_SYS, temperature=0.1, max_tokens=900)
+    # json_mode guarantees valid JSON even when the (now detailed, multi-paragraph)
+    # answer contains quotes/newlines; the larger budget gives room for comparisons.
+    raw = client.chat(prompt, system=_SYS, temperature=0.2, max_tokens=1800, json_mode=True)
     start, end = raw.find("{"), raw.rfind("}")
     try:
-        parsed = json.loads(raw[start : end + 1]) if start != -1 else {"answer": raw}
+        # strict=False: tolerate literal tabs/newlines the model may copy from filing tables.
+        parsed = json.loads(raw[start : end + 1], strict=False) if start != -1 else {"answer": raw}
     except (json.JSONDecodeError, ValueError):
         parsed = {"answer": raw, "citations": [], "grounded": False}
 

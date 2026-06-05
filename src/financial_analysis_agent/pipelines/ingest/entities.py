@@ -64,7 +64,11 @@ def _parse(raw: str) -> dict:
     if start == -1:
         return {}
     try:
-        return json.loads(raw[start : end + 1])
+        # strict=False allows literal control chars (tabs/newlines) inside strings.
+        # The LLM copies source_quotes verbatim from tab-separated filing tables, so
+        # quotes routinely contain raw tabs -- invalid in strict JSON, which would
+        # silently drop every entity for table-heavy filings (e.g. SNDK).
+        return json.loads(raw[start : end + 1], strict=False)
     except (json.JSONDecodeError, ValueError):
         return {}
 
@@ -72,7 +76,10 @@ def _parse(raw: str) -> dict:
 def extract(segments: list[dict], *, client: GroqClient | None = None) -> tuple[dict, str]:
     client = client or GroqClient()
     prompt = _INSTRUCTIONS.replace("{seed}", ", ".join(SEED_TOPICS)) + _concat(segments)
-    raw = client.chat(prompt, system=_SYS, temperature=0.0, max_tokens=1500)
+    # json_mode guarantees valid JSON: prevents the model from emitting unescaped
+    # quotes (in quoted speech) or raw tabs (from filing tables) that silently
+    # dropped entities and left companies isolated in the graph.
+    raw = client.chat(prompt, system=_SYS, temperature=0.0, max_tokens=1500, json_mode=True)
     return _parse(raw), client.model
 
 
@@ -145,9 +152,12 @@ def store(
     conn: sqlite3.Connection, call_id: int, company_id: int, extracted: dict
 ) -> dict:
     """Persist topics->mentions and executives->tenure. Idempotent per call."""
-    # Idempotent: clear this call's topic mentions before re-inserting.
+    # Idempotent: clear this call's mentions before re-inserting. We re-create both
+    # topic AND person mentions below, so both must be cleared -- otherwise re-running
+    # extraction duplicates every person mention.
     conn.execute(
-        "DELETE FROM mentions WHERE call_id = ? AND target_type = 'topic'", (call_id,)
+        "DELETE FROM mentions WHERE call_id = ? AND target_type IN ('topic', 'person')",
+        (call_id,),
     )
 
     n_topics = 0

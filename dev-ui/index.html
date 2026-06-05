@@ -153,35 +153,58 @@ function CallDetail({id,onClose}){
 }
 
 /* ---------------- Ask (Q&A) ---------------- */
+const ASK_EXAMPLES=[
+  'Compare gross and operating margins for MSFT vs NVDA',
+  'Which company returned the most cash to shareholders, and how?',
+  'What is AMD saying about AI infrastructure demand, and how does it compare to NVDA?',
+  'Who is the CEO of AMD and what did they emphasize this quarter?',
+  'Compare revenue and revenue growth across NVDA, AMD and GOOGL',
+  'What guidance did Tesla give, and how confident was the tone?',
+  'Summarize the biggest risks Meta flagged this quarter',
+];
 function Ask(){
-  const [q,setQ]=useState('Which company returned the most cash to shareholders?');
+  const [q,setQ]=useState(ASK_EXAMPLES[0]);
   const [ticker,setTicker]=useState('');
   const [companies,setCompanies]=useState([]);
   const [res,setRes]=useState(null);
   const [loading,setLoading]=useState(false);
   useEffect(()=>{api('/companies').then(setCompanies);},[]);
-  const go=()=>{setLoading(true);setRes(null);
-    post('/ask',{question:q,ticker:ticker||null}).then(r=>{setRes(r);setLoading(false);});};
+  // Accept an explicit question so example chips can submit without waiting on setState.
+  const go=(question)=>{const query=((question!=null?question:q)||'').trim();
+    if(!query||loading) return;
+    setLoading(true);setRes(null);
+    post('/ask',{question:query,ticker:ticker||null}).then(r=>{setRes(r);setLoading(false);});};
+  // Enter submits; Shift+Enter inserts a newline.
+  const onKey=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();go();}};
   return (<div>
     <h2 className="sec">Grounded Q&A</h2>
-    <textarea rows="2" value={q} onChange={e=>setQ(e.target.value)} placeholder="Ask about the earnings data…" />
+    <textarea rows="2" value={q} onChange={e=>setQ(e.target.value)} onKeyDown={onKey}
+      placeholder="Ask about the earnings data…  (Enter to ask · Shift+Enter for a new line)" />
     <div className="row" style={{marginTop:10}}>
       <select value={ticker} onChange={e=>setTicker(e.target.value)}>
         <option value="">All companies</option>
         {companies.map(c=><option key={c.ticker} value={c.ticker}>{c.ticker}</option>)}
       </select>
-      <button className="primary" onClick={go} disabled={loading||!q.trim()}>{loading?'Thinking…':'Ask'}</button>
-      <span className="muted">retrieval → SQLite text + XBRL financials → grounded answer</span>
+      <button className="primary" onClick={()=>go()} disabled={loading||!q.trim()}>{loading?'Thinking…':'Ask'}</button>
+      <span className="muted">Enter to ask · Shift+Enter = new line · retrieval → SQLite text + XBRL → grounded answer</span>
     </div>
+    <div style={{marginTop:10}}>
+      <span className="muted" style={{fontSize:12}}>Try one: </span>
+      {ASK_EXAMPLES.map((ex,i)=><span className="chip" key={i}
+        style={{cursor:loading?'default':'pointer',opacity:loading?.5:1}}
+        onClick={()=>{if(loading)return;setQ(ex);go(ex);}}>{ex}</span>)}
+    </div>
+    {loading&&<p className="muted" style={{marginTop:16}}>Retrieving segments and composing a detailed, grounded answer…</p>}
     {res&&<div className="card" style={{marginTop:16}}>
       <div className="row"><b style={{fontSize:15}}>Answer</b>
         <span className={'badge '+(res.grounded?'b-green':'b-amber')}>{res.grounded?'grounded':'not in data'}</span></div>
-      <p style={{fontSize:15}}>{res.answer}</p>
-      {res.sources.length>0&&<div>
-        <h2 className="sec">Sources ({res.sources.length})</h2>
+      <div style={{fontSize:14.5,whiteSpace:'pre-wrap',lineHeight:1.6,marginTop:8}}>{res.answer}</div>
+      {res.sources.length>0?<div>
+        <h2 className="sec">Sources ({res.sources.length}) — exact text this answer is grounded in</h2>
         {res.sources.map(s=>(<div className="src" key={s.segment_id}>
           <div className="meta">[seg {s.segment_id}] {s.ticker} {s.quarter} · {s.who}</div>{s.text}</div>))}
-      </div>}
+      </div>:<p className="muted" style={{fontSize:12,marginTop:12}}>
+        Grounded in XBRL-verified financials / leadership records — no single text segment to quote.</p>}
     </div>}
   </div>);
 }

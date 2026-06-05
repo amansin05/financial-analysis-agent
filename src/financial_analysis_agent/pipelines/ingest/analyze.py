@@ -71,7 +71,8 @@ def _parse_json(raw: str) -> dict:
     if start == -1:
         return {"_raw": raw, "_parse_error": True}
     try:
-        return json.loads(raw[start : end + 1])
+        # strict=False: tolerate literal tabs/newlines the model may copy from filing tables.
+        return json.loads(raw[start : end + 1], strict=False)
     except (json.JSONDecodeError, ValueError):
         return {"_raw": raw, "_parse_error": True}
 
