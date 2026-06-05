@@ -24,17 +24,26 @@ class GroqClient:
         model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 1024,
+        json_mode: bool = False,
     ) -> str:
-        """Single-turn completion; returns the assistant text."""
+        """Single-turn completion; returns the assistant text.
+
+        json_mode=True forces syntactically valid JSON (response_format json_object),
+        so the model can't emit unescaped quotes or literal control characters that
+        would break parsing. Requires the word "json" in the prompt/system (caller's
+        responsibility -- the API rejects the request otherwise).
+        """
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
+        kwargs = {"response_format": {"type": "json_object"}} if json_mode else {}
         resp = self.client.chat.completions.create(
             model=model or self.model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            **kwargs,
         )
         return resp.choices[0].message.content or ""
 
