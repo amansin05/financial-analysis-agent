@@ -70,9 +70,10 @@ def summarize_segments(
     prompt = _build_prompt(segments, doc_kind)
     raw = client.chat(prompt, system=_SYSTEM, temperature=0.2, max_tokens=1500)
     try:
-        # Be forgiving if the model wraps JSON in prose/fences.
+        # Be forgiving if the model wraps JSON in prose/fences. strict=False also
+        # tolerates literal tabs/newlines the model may copy from filing tables.
         start, end = raw.find("{"), raw.rfind("}")
-        parsed = json.loads(raw[start : end + 1]) if start != -1 else {"raw": raw}
+        parsed = json.loads(raw[start : end + 1], strict=False) if start != -1 else {"raw": raw}
     except (json.JSONDecodeError, ValueError):
         parsed = {"raw": raw, "_parse_error": True}
     return parsed, client.model
